@@ -28,7 +28,7 @@ func (s *GeminiServer) AddRoute(path string, handler HandlerFunc) {
 }
 
 // HandleRequest processes incoming Gemini requests and involes the corresponding route handler
-ounc (s *GeminiServer) HandleRequest(conn net.Conn) {
+func (s *GeminiServer) HandleRequest(conn net.Conn) {
 	defer conn.Close()
 
 	buf := make([]byte, 1024)
@@ -38,8 +38,14 @@ ounc (s *GeminiServer) HandleRequest(conn net.Conn) {
 		return
 	}
 
+	// Trim whitespace and newline characters
 	path := strings.TrimSpace(string(buf[:n]))
 	log.Println("Received request for:", path)
+
+	// Normalise the path to remove trailing slashes
+	if len(path) > 1 && path[len(path)-1] == '/' {
+		path = path[:len(path)-1]
+	}
 
 	for _, route := range s.Routes {
 		if strings.HasPrefix(path, route.Path) {
@@ -58,7 +64,7 @@ func (s *GeminiServer) Start(certFile, keyFile string) error {
 		return fmt.Errorf("failed to load TLS certificate: %v", err)
 	}
 
-	config := &tls.Config{Certificate: []tls.Certificate{cert}}
+	config := &tls.Config{Certificates: []tls.Certificate{cert}}
 
 	listener, err := tls.Listen("tcp", s.Addr, config)
 	if err != nil {
