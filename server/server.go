@@ -36,8 +36,8 @@ func prefixMatch(path string, route Route) bool {
 	hasPrefix := strings.HasPrefix(path, route.Path)
 	lenPathMatches := len(path) == len(route.Path)
 	lenRoutePathMatches := len(path) > len(route.Path) && path[len(route.Path)] == '/'
-	fmt.Printf("Checking prefix match: %s starts with %s? %v\n", path, route.Path, hasPrefix)
-	fmt.Printf("Length match: %v, Slash match: %v\n", lenPathMatches, lenRoutePathMatches)
+	fmt.Printf("Checking prefix match: %s starts with %s? %v\n", path, route.Path, hasPrefix) //TODO remove
+	fmt.Printf("Length match: %v, Slash match: %v\n", lenPathMatches, lenRoutePathMatches)    // TODO remove
 	return hasPrefix && (lenPathMatches || lenRoutePathMatches)
 }
 
@@ -67,21 +67,31 @@ func (s *GeminiServer) HandleRequest(conn net.Conn) {
 		return
 	}
 
-	// Trim whitespace and newline characters
 	path := strings.TrimSpace(string(buf[:n]))
 	log.Println("Received request for:", path)
+
+	// Extract the path from the URI (e.g., "gemini://localhost/somepath" -> "/somepath")
+	if strings.HasPrefix(path, "gemini://") {
+		path = path[len("gemini://"):]
+		// Remove host part
+		if idx := strings.Index(path, "/"); idx != -1 {
+			path = path[idx:]
+		} else {
+			path = "/"
+		}
+	}
 
 	// Normalize the path to remove query strings and trailing slashes
 	if idx := strings.Index(path, "?"); idx != -1 {
 		path = path[:idx]
 	}
 
-	// Normalise the path to remove trailing slashes
+	// Normalize the path to remove trailing slashes except for the root "/"
 	if len(path) > 1 && path[len(path)-1] == '/' {
 		path = path[:len(path)-1]
 	}
 
-	// Create a matcher function that prioritise exact match and falls back to prefix match
+	// Create a matcher function that prioritizes exact match and falls back to prefix match
 	matcher := func(path string) *Route {
 		if route := matchRoute(s.Routes, exactMatch)(path); route != nil {
 			return route
@@ -89,15 +99,12 @@ func (s *GeminiServer) HandleRequest(conn net.Conn) {
 		return matchRoute(s.Routes, prefixMatch)(path)
 	}
 
-	// Find the matchin route and execute the handler
-	// fmt.Println(path)
-	// fmt.Println(route)
-
+	// Find the matching route and execute the handler
 	if route := matcher(path); route != nil {
-		fmt.Println("matcher if")
+		// log.Println("Route matched:", route.Path)
 		route.Handler(path, conn)
 	} else {
-		fmt.Println("matcher else")
+		// log.Println("No matching route found.")
 		handleNotFound(conn)
 	}
 }
