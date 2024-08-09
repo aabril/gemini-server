@@ -19,4 +19,5 @@ func HelloHandler(path string, conn net.Conn) {
 // EchoHandler echoes back the requested path.
 func EchoHandler(path string, conn net.Conn) {
 	response := fmt.Sprintf("20 text/gemini\r\nYou Said: %s\r\n", path)
+	io.WriteString(conn, response)
 }
