@@ -27,6 +27,35 @@ func (s *GeminiServer) AddRoute(path string, handler HandlerFunc) {
 	s.Routes = append(s.Routes, Route{Path: path, Handler: handler})
 }
 
+// HandleRequest helpers
+func exactMatch(path string, route Route) bool {
+	return path == route.Path
+}
+
+func prefixMatch(path string, route Route) bool {
+	hasPrefix := strings.HasPrefix(path, route.Path)
+	lenPathMatches := len(path) == len(route.Path)
+	lenRoutePathMatches := len(path) > len(route.Path) && path[len(route.Path)] == '/'
+	fmt.Printf("Checking prefix match: %s starts with %s? %v\n", path, route.Path, hasPrefix)
+	fmt.Printf("Length match: %v, Slash match: %v\n", lenPathMatches, lenRoutePathMatches)
+	return hasPrefix && (lenPathMatches || lenRoutePathMatches)
+}
+
+func matchRoute(routes []Route, matcher RouteMatcher) func(string) *Route {
+	return func(path string) *Route {
+		for _, route := range routes {
+			if matcher(path, route) {
+				return &route
+			}
+		}
+		return nil
+	}
+}
+
+func handleNotFound(conn net.Conn) {
+	conn.Write([]byte("51 Not Found \r\n"))
+}
+
 // HandleRequest processes incoming Gemini requests and involes the corresponding route handler
 func (s *GeminiServer) HandleRequest(conn net.Conn) {
 	defer conn.Close()
@@ -42,20 +71,35 @@ func (s *GeminiServer) HandleRequest(conn net.Conn) {
 	path := strings.TrimSpace(string(buf[:n]))
 	log.Println("Received request for:", path)
 
+	// Normalize the path to remove query strings and trailing slashes
+	if idx := strings.Index(path, "?"); idx != -1 {
+		path = path[:idx]
+	}
+
 	// Normalise the path to remove trailing slashes
 	if len(path) > 1 && path[len(path)-1] == '/' {
 		path = path[:len(path)-1]
 	}
 
-	for _, route := range s.Routes {
-		if strings.HasPrefix(path, route.Path) {
-			route.Handler(path, conn)
-			return
+	// Create a matcher function that prioritise exact match and falls back to prefix match
+	matcher := func(path string) *Route {
+		if route := matchRoute(s.Routes, exactMatch)(path); route != nil {
+			return route
 		}
+		return matchRoute(s.Routes, prefixMatch)(path)
 	}
 
-	// If no route matches, send a 51 "not found" response.
-	conn.Write([]byte("51 Not Found\r\n"))
+	// Find the matchin route and execute the handler
+	// fmt.Println(path)
+	// fmt.Println(route)
+
+	if route := matcher(path); route != nil {
+		fmt.Println("matcher if")
+		route.Handler(path, conn)
+	} else {
+		fmt.Println("matcher else")
+		handleNotFound(conn)
+	}
 }
 
 func (s *GeminiServer) Start(certFile, keyFile string) error {
