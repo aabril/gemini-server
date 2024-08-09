@@ -5,7 +5,7 @@ import (
 )
 
 // HandlerFunc defines a function type for handling Gemini request
-type HandlerFunc func(path stringg, conn net.Conn)
+type HandlerFunc func(path string, conn net.Conn)
 
 type Route struct {
 	Path    string
